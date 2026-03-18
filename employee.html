@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Management</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      margin: 0;
+      padding: 20px;
+      color: white;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: rgba(255,255,255,0.15);
+      padding: 20px;
+      border-radius: 15px;
+      backdrop-filter: blur(10px);
+
+      /* Animation */
+      animation: fadeIn 0.6s ease-in-out;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: none;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #764ba2;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    .logout {
+      background: red;
+      color: white;
+      margin-bottom: 10px;
+    }
+
+    .employee {
+      background: rgba(255,255,255,0.2);
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 8px;
+    }
+
+    .delete {
+      background: red;
+      color: white;
+      margin-top: 5px;
+    }
+
+    .edit {
+      background: orange;
+      color: white;
+      margin-top: 5px;
+    }
+
+    #message {
+      text-align: center;
+      font-weight: bold;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Employee Management</h2>
+
+  <div class="container">
+
+    <!-- Logout -->
+    <button class="logout" onclick="logout()">Logout</button>
+
+    <!-- Message -->
+    <p id="message"></p>
+
+    <!-- Search -->
+    <input type="text" id="search" placeholder="Search employee..." onkeyup="searchEmployee()">
+
+    <input type="text" id="name" placeholder="Employee Name">
+    <input type="email" id="email" placeholder="Employee Email">
+    <input type="text" id="position" placeholder="Position">
+
+    <button onclick="addEmployee()">Save Employee</button>
+
+    <div id="employeeList"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBo4_K6b87kIeWoorq1gi_N41PUyUcacLI",
+      authDomain: "userauthsystem-3546f.firebaseapp.com",
+      projectId: "userauthsystem-3546f",
+      storageBucket: "userauthsystem-3546f.firebasestorage.app",
+      messagingSenderId: "465812955303",
+      appId: "1:465812955303:web:5f72450c99a63fc7943b82"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // Protect page
+    setTimeout(() => {
+      onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          window.location.href = "login.html";
+        }
+      });
+    }, 1000);
+
+    const list = document.getElementById("employeeList");
+    let editId = null;
+
+    // Message function
+    function showMessage(msg) {
+      const message = document.getElementById("message");
+      message.innerText = msg;
+
+      setTimeout(() => {
+        message.innerText = "";
+      }, 2000);
+    }
+
+    // Add / Update
+    window.addEmployee = async function() {
+      const name = document.getElementById("name").value;
+      const email = document.getElementById("email").value;
+      const position = document.getElementById("position").value;
+
+      if (!name || !email || !position) {
+        showMessage("Please fill all fields ⚠️");
+        return;
+      }
+
+      if (editId) {
+        await updateDoc(doc(db, "employees", editId), {
+          name, email, position
+        });
+        showMessage("Employee Updated ✏️");
+        editId = null;
+      } else {
+        await addDoc(collection(db, "employees"), {
+          name, email, position
+        });
+        showMessage("Employee Added ✅");
+      }
+
+      document.getElementById("name").value = "";
+      document.getElementById("email").value = "";
+      document.getElementById("position").value = "";
+
+      loadEmployees();
+    }
+
+    // Load employees
+    async function loadEmployees() {
+      list.innerHTML = "";
+
+      const querySnapshot = await getDocs(collection(db, "employees"));
+
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+
+        const div = document.createElement("div");
+        div.className = "employee";
+
+        div.setAttribute("data-name", data.name.toLowerCase());
+        div.setAttribute("data-email", data.email.toLowerCase());
+
+        div.innerHTML = `
+          <p><b>${data.name}</b></p>
+          <p>${data.email}</p>
+          <p>${data.position}</p>
+          <button class="edit" onclick="editEmployee('${docSnap.id}', '${data.name}', '${data.email}', '${data.position}')">Edit</button>
+          <button class="delete" onclick="deleteEmployee('${docSnap.id}')">Delete</button>
+        `;
+
+        list.appendChild(div);
+      });
+    }
+
+    // Search
+    window.searchEmployee = function() {
+      const search = document.getElementById("search").value.toLowerCase();
+      const employees = document.querySelectorAll(".employee");
+
+      employees.forEach(emp => {
+        const name = emp.getAttribute("data-name");
+        const email = emp.getAttribute("data-email");
+
+        if (name.includes(search) || email.includes(search)) {
+          emp.style.display = "block";
+        } else {
+          emp.style.display = "none";
+        }
+      });
+    }
+
+    // Edit
+    window.editEmployee = function(id, name, email, position) {
+      document.getElementById("name").value = name;
+      document.getElementById("email").value = email;
+      document.getElementById("position").value = position;
+
+      editId = id;
+    }
+
+    // Delete
+    window.deleteEmployee = async function(id) {
+      await deleteDoc(doc(db, "employees", id));
+      loadEmployees();
+    }
+
+    // Logout
+    window.logout = function() {
+      signOut(auth).then(() => {
+        window.location.href = "login.html";
+      });
+    }
+
+    loadEmployees();
+  </script>
+
+</body>
+</html>
